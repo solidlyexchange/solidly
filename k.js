@@ -3,6 +3,9 @@ const x = 1000;
 const y = 1000;
 
 yOut = getAmountOut(xIn,x,y);
+yOut2 = getAmountOutAnalytical(xIn,x,y);
+console.log('Iterative:', yOut)
+console.log('Analytical:', yOut2)
 
 
 // getAmountOut gives the amount that will be returned given the amountIn for tokenIn
@@ -58,6 +61,18 @@ function getAmountOut(xIn, x, y) {
   console.log("_k2 yOutAbove",_k(x+xIn,y-yOutAbove));
   console.log("_k2 yOutBelow",_k(x+xIn,y-yOutBelow));
   console.log("_k2 yOut",_k(x+xIn,y-yOut));
+  return yOut;
+}
+
+function getAmountOutAnalytical(a, x, y) {
+
+  let k = _k(x,y)*2;
+  let cuberoot2 = 2**(1/3);
+  let term1 = 3*a**4 + 12*a**3*x + 18*a**2*x**2 + 12*a*x**3 + 3*x**4;
+  let term2 = (-27*a**2*k + Math.sqrt((-27*a**2*k - 54*a*k*x - 27*k*x**2)**2 + 4*term1**3) - 54*a*k*x - 27*k*x**2)**(1/3);
+  let b = -(cuberoot2*(term1))/(3*(a+x)*term2) + term2 / (3*cuberoot2*(a + x)) + (a*y + x*y)/(a + x);
+
+  return b;
 }
 
 function _k(_x, _y) {
