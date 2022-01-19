@@ -112,6 +112,15 @@ event Supply:
     prevSupply: uint256
     supply: uint256
 
+event CommitAdmin:
+    admin: address
+
+event ApplyAdmin:
+    admin: address
+
+event SetTokenizer:
+    tokenizer: address
+
 # @dev Emits when ownership of any NFT changes by any mechanism. This event emits when NFTs are
 #      created (`from` == 0) and destroyed (`to` == 0). Exception: during contract creation, any
 #      number of NFTs may be created and assigned without emitting Transfer. At the time of any
@@ -165,6 +174,8 @@ name: public(String[64])
 symbol: public(String[32])
 version: public(String[32])
 decimals: public(uint256)
+admin: public(address)
+future_admin: public(address)
 tokenizer: address
 
 MIN_VE: constant(uint256) = 2500 * 10**18
@@ -212,7 +223,7 @@ ERC721_METADATA_INTERFACE_ID: constant(bytes32) = 0x0000000000000000000000000000
 ERC721_ENUMERABLE_INTERFACE_ID: constant(bytes32) = 0x00000000000000000000000000000000000000000000000000000000780e9d63
 
 @external
-def __init__(token_addr: address, _name: String[64], _symbol: String[32], _version: String[32], tokenizer: address):
+def __init__(token_addr: address, _name: String[64], _symbol: String[32], _version: String[32], _tokenizer: address, _admin: address):
     """
     @notice Contract constructor
     @param token_addr `ERC20CRV` token address
@@ -231,7 +242,8 @@ def __init__(token_addr: address, _name: String[64], _symbol: String[32], _versi
     self.name = _name
     self.symbol = _symbol
     self.version = _version
-    self.tokenizer = tokenizer
+    self.tokenizer = _tokenizer
+    self.admin = _admin
 
     self.supportedInterfaces[ERC165_INTERFACE_ID] = True
     self.supportedInterfaces[ERC721_INTERFACE_ID] = True
@@ -240,6 +252,35 @@ def __init__(token_addr: address, _name: String[64], _symbol: String[32], _versi
     self.tokenId = 0
 
     log Transfer(ZERO_ADDRESS, msg.sender, 0)
+
+@external
+def commit_admin(_addr: address):
+    """
+    @notice Commit transfer of ownership
+    @param _addr New admin address
+    """
+    assert msg.sender == self.admin  # dev: access denied
+    self.future_admin = _addr
+    log CommitAdmin(_addr)
+
+@external
+def apply_admin():
+    """
+    @notice Apply transfer of ownership
+    """
+    assert msg.sender == self.future_admin
+    future_admin: address = self.future_admin
+    self.admin = future_admin
+    log ApplyAdmin(future_admin)
+
+@external
+def set_tokenizer(_tokenizer:address):
+    """
+    @notice Set tokenizer address
+    """
+    assert msg.sender == self.admin
+    self.tokenizer = _tokenizer
+    log SetTokenizer(_tokenizer)
 
 @view
 @external
