@@ -483,8 +483,7 @@ def apply_admin():
     """
     @notice Apply transfer of ownership
     """
-    assert msg.sender == self.admin
-    assert self.future_admin != ZERO_ADDRESS
+    assert msg.sender == self.future_admin 
     future_admin: address = self.future_admin
     self.admin = future_admin
     log ApplyAdmin(future_admin)
