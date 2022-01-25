@@ -287,25 +287,6 @@ interface IERC721Metadata is IERC721 {
     function tokenURI(uint256 tokenId) external view returns (string memory);
 }
 
-interface IERC721Enumerable is IERC721 {
-    /**
-     * @dev Returns the total amount of tokens stored by the contract.
-     */
-    function totalSupply() external view returns (uint256);
-
-    /**
-     * @dev Returns a token ID owned by `owner` at a given `index` of its token list.
-     * Use along with {balanceOf} to enumerate all of ``owner``'s tokens.
-     */
-    function tokenOfOwnerByIndex(address owner, uint256 index) external view returns (uint256);
-
-    /**
-     * @dev Returns a token ID at a given `index` of all the tokens stored by the contract.
-     * Use along with {totalSupply} to enumerate all tokens.
-     */
-    function tokenByIndex(uint256 index) external view returns (uint256);
-}
-
 /**
  * @dev Interface of the ERC20 standard as defined in the EIP.
  */
@@ -350,7 +331,7 @@ struct LockedBalance {
     uint256 end;
 }
 
-contract ve is IERC721, IERC721Enumerable, IERC721Metadata {
+contract ve is IERC721, IERC721Metadata {
     enum DepositType {
         DEPOSIT_FOR_TYPE,
         CREATE_LOCK_TYPE,
@@ -409,12 +390,6 @@ contract ve is IERC721, IERC721Enumerable, IERC721Metadata {
     /// @dev Mapping from owner address to count of his tokens.
     mapping(address => uint256) ownerToNFTokenCount;
 
-    /// @dev Mapping from owner address to mapping of index to tokenIds
-    mapping(address => mapping(uint256 => uint256)) ownerToNFTokenIdList;
-
-    /// @dev Mapping from NFT ID to index of owner
-    mapping(uint256 => uint256) tokenToOwnerIndex;
-
     /// @dev Mapping from owner address to mapping of operator addresses.
     mapping(address => mapping(address => bool)) ownerToOperators;
 
@@ -429,9 +404,6 @@ contract ve is IERC721, IERC721Enumerable, IERC721Metadata {
 
     /// @dev ERC165 interface ID of ERC721Metadata
     bytes4 constant ERC721_METADATA_INTERFACE_ID = 0x5b5e139f;
-
-    /// @dev ERC165 interface ID of ERC721Enumerable
-    bytes4 constant ERC721_ENUMERABLE_INTERFACE_ID = 0x780e9d63;
 
     /// @dev reentrancy guard
     uint8 constant _not_entered = 1;
@@ -457,7 +429,6 @@ contract ve is IERC721, IERC721Enumerable, IERC721Metadata {
         supportedInterfaces[ERC165_INTERFACE_ID] = true;
         supportedInterfaces[ERC721_INTERFACE_ID] = true;
         supportedInterfaces[ERC721_METADATA_INTERFACE_ID] = true;
-        supportedInterfaces[ERC721_ENUMERABLE_INTERFACE_ID] = true;
 
         // mint-ish
         emit Transfer(address(0), address(this), tokenId);
@@ -527,16 +498,6 @@ contract ve is IERC721, IERC721Enumerable, IERC721Metadata {
         return (ownerToOperators[_owner])[_operator];
     }
 
-    /// @dev  Get token by index
-    function tokenByIndex(uint256 _tokenId) external pure returns (uint256) {
-        return _tokenId;
-    }
-
-    /// @dev  Get token by index
-    function tokenOfOwnerByIndex(address _owner, uint256 _tokenIndex) external view returns (uint256) {
-        return ownerToNFTokenIdList[_owner][_tokenIndex];
-    }
-
     /// @dev Returns whether the given spender can transfer a given token ID
     /// @param _spender address of the spender to query
     /// @param _tokenId uint256 ID of the token to be transferred
@@ -553,46 +514,6 @@ contract ve is IERC721, IERC721Enumerable, IERC721Metadata {
         return _isApprovedOrOwner(_spender, _tokenId);
     }
 
-    /// @dev Add a NFT to an index mapping to a given address
-    /// @param _to address of the receiver
-    /// @param _tokenId uint256 ID Of the token to be added
-    function _addTokenToOwnerList(address _to, uint256 _tokenId) internal {
-        uint256 current_count = _balance(_to);
-
-        ownerToNFTokenIdList[_to][current_count] = _tokenId;
-        tokenToOwnerIndex[_tokenId] = current_count;
-    }
-
-    /// @dev Remove a NFT from an index mapping to a given address
-    /// @param _from address of the sender
-    /// @param _tokenId uint256 ID Of the token to be removed
-    function _removeTokenFromOwnerList(address _from, uint256 _tokenId) internal {
-        // Delete
-        uint256 current_count = _balance(_from);
-        uint256 current_index = tokenToOwnerIndex[_tokenId];
-
-        if (current_count == current_index) {
-            // update ownerToNFTokenIdList
-            ownerToNFTokenIdList[_from][current_count] = 0;
-            // update tokenToOwnerIndex
-            tokenToOwnerIndex[_tokenId] = 0;
-        } else {
-            uint256 lastTokenId = ownerToNFTokenIdList[_from][current_count];
-
-            // Add
-            // update ownerToNFTokenIdList
-            ownerToNFTokenIdList[_from][current_index] = lastTokenId;
-            // update tokenToOwnerIndex
-            tokenToOwnerIndex[lastTokenId] = current_index;
-
-            // Delete
-            // update ownerToNFTokenIdList
-            ownerToNFTokenIdList[_from][current_count] = 0;
-            // update tokenToOwnerIndex
-            tokenToOwnerIndex[_tokenId] = 0;
-        }
-    }
-
     /// @dev Add a NFT to a given address
     ///      Throws if `_tokenId` is owned by someone.
     function _addTokenTo(address _to, uint256 _tokenId) internal {
@@ -600,8 +521,6 @@ contract ve is IERC721, IERC721Enumerable, IERC721Metadata {
         assert(idToOwner[_tokenId] == address(0));
         // Change the owner
         idToOwner[_tokenId] = _to;
-        // Update owner token index tracking
-        _addTokenToOwnerList(_to, _tokenId);
         // Change count tracking
         ownerToNFTokenCount[_to] += 1;
     }
@@ -613,8 +532,6 @@ contract ve is IERC721, IERC721Enumerable, IERC721Metadata {
         assert(idToOwner[_tokenId] == _from);
         // Change the owner
         idToOwner[_tokenId] = address(0);
-        // Update owner token index tracking
-        _removeTokenFromOwnerList(_from, _tokenId);
         // Change count tracking
         ownerToNFTokenCount[_from] -= 1;
     }
