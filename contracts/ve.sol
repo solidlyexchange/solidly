@@ -356,7 +356,8 @@ contract ve is IERC721, IERC721Enumerable, IERC721Metadata {
         CREATE_LOCK_TYPE,
         INCREASE_LOCK_AMOUNT,
         INCREASE_UNLOCK_TIME,
-        MERGE_TYPE
+        MERGE_TYPE,
+        SPLIT_TYPE
     }
 
     event Deposit(
@@ -972,6 +973,30 @@ contract ve is IERC721, IERC721Enumerable, IERC721Metadata {
         locked[_from] = _locked0;
         _burn(_from);
         _deposit_for(msg.sender, _to, value0, end, _locked1, DepositType.MERGE_TYPE, true);
+    }
+
+    function split(uint256 _tokenId, uint256 _amount) external returns (uint256) {
+        assert(_isApprovedOrOwner(msg.sender, _tokenId));
+
+        LockedBalance memory _locked = locked[_tokenId];
+        uint256 value = uint256(int256(_locked.amount));
+        uint256 end = _locked.end;
+
+        int128 remainingValue = int128(int256(value - _amount));
+
+        _checkpoint(_tokenId, _locked, LockedBalance(remainingValue, end));
+
+        _locked.amount = remainingValue;
+        _locked.end = end;
+        locked[_tokenId] = _locked;
+
+        ++tokenId;
+        uint256 newTokenId = tokenId;
+        _mint(msg.sender, newTokenId);
+
+        _deposit_for(msg.sender, newTokenId, _amount, end, LockedBalance(0, 0), DepositType.SPLIT_TYPE, true);
+
+        return newTokenId;
     }
 
     /// @notice Record global data to checkpoint
