@@ -51,6 +51,7 @@ describe("minter", function () {
     const VeDist = await ethers.getContractFactory("contracts/ve_dist.sol:ve_dist");
     ve_dist = await VeDist.deploy(ve.address, ve_underlying.address, owner.address);
     await ve_dist.deployed();
+    await ve.setVoter(gauge_factory.address);
 
     const BaseV1Minter = await ethers.getContractFactory("BaseV1Minter");
     minter = await BaseV1Minter.deploy(gauge_factory.address, ve.address, ve_dist.address);

@@ -389,8 +389,12 @@ contract ve is IERC721, IERC721Enumerable, IERC721Metadata {
     mapping(uint256 => uint256) public user_point_epoch;
     mapping(uint256 => int128) public slope_changes; // time -> signed slope change
 
-    string constant public name = "ve";
-    string constant public symbol = "ve";
+    mapping(uint => uint) public attachments;
+    mapping(uint => bool) public voted;
+    address public voter;
+
+    string constant public name = "veNFT";
+    string constant public symbol = "veNFT";
     string constant public version = "1.0.0";
     uint256 constant public decimals = 18;
 
@@ -447,6 +451,7 @@ contract ve is IERC721, IERC721Enumerable, IERC721Metadata {
         address token_addr
     ) {
         token = token_addr;
+        voter = msg.sender;
         point_history[0].blk = block.number;
         point_history[0].ts = block.timestamp;
 
@@ -638,8 +643,9 @@ contract ve is IERC721, IERC721Enumerable, IERC721Metadata {
         uint256 _tokenId,
         address _sender
     ) internal {
+        require(attachments[_tokenId] == 0 && !voted[_tokenId], "attached");
         // Check requirements
-        assert(_isApprovedOrOwner(_sender, _tokenId));
+        require(_isApprovedOrOwner(_sender, _tokenId));
         // Clear approval. Throws if `_from` is not the current owner
         _clearApproval(_from, _tokenId);
         // Remove NFT. Throws if `_tokenId` is not a valid NFT
@@ -734,13 +740,13 @@ contract ve is IERC721, IERC721Enumerable, IERC721Metadata {
     function approve(address _approved, uint256 _tokenId) public {
         address owner = idToOwner[_tokenId];
         // Throws if `_tokenId` is not a valid NFT
-        assert(owner != address(0));
+        require(owner != address(0));
         // Throws if `_approved` is the current owner
-        assert(_approved != owner);
+        require(_approved != owner);
         // Check requirements
         bool senderIsOwner = (idToOwner[_tokenId] == msg.sender);
         bool senderIsApprovedForAll = (ownerToOperators[owner])[msg.sender];
-        assert(senderIsOwner || senderIsApprovedForAll);
+        require(senderIsOwner || senderIsApprovedForAll);
         // Set the approval
         idToApprovals[_tokenId] = _approved;
         emit Approval(owner, _approved, _tokenId);
@@ -957,9 +963,35 @@ contract ve is IERC721, IERC721Enumerable, IERC721Metadata {
         emit Supply(supply_before, supply_before + _value);
     }
 
+    function setVoter(address _voter) external {
+        require(msg.sender == voter);
+        voter = _voter;
+    }
+
+    function voting(uint _tokenId) external {
+        require(msg.sender == voter);
+        voted[_tokenId] = true;
+    }
+
+    function abstain(uint _tokenId) external {
+        require(msg.sender == voter);
+        voted[_tokenId] = false;
+    }
+
+    function attach(uint _tokenId) external {
+        require(msg.sender == voter);
+        attachments[_tokenId] = attachments[_tokenId]+1;
+    }
+
+    function detach(uint _tokenId) external {
+        require(msg.sender == voter);
+        attachments[_tokenId] = attachments[_tokenId]-1;
+    }
+
     function merge(uint256 _from, uint256 _to) external {
-        assert(_isApprovedOrOwner(msg.sender, _from));
-        assert(_isApprovedOrOwner(msg.sender, _to));
+        require(attachments[_from] == 0 && !voted[_from], "attached");
+        require(_isApprovedOrOwner(msg.sender, _from));
+        require(_isApprovedOrOwner(msg.sender, _to));
 
         LockedBalance memory _locked0 = locked[_from];
         LockedBalance memory _locked1 = locked[_to];
@@ -1086,6 +1118,7 @@ contract ve is IERC721, IERC721Enumerable, IERC721Metadata {
     /// @dev Only possible if the lock has expired
     function withdraw(uint256 _tokenId) external nonreentrant {
         assert(_isApprovedOrOwner(msg.sender, _tokenId));
+        require(attachments[_tokenId] == 0 && !voted[_tokenId], "attached");
 
         LockedBalance memory _locked = locked[_tokenId];
         require(block.timestamp >= _locked.end, "The lock didn't expire");

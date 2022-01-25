@@ -30,6 +30,7 @@ describe("staking", function () {
   let owner3;
   let ve;
   let reward2;
+  let voter;
 
   it("deploy base coins", async function () {
     [owner, owner2, owner3] = await ethers.getSigners(3);
@@ -49,6 +50,9 @@ describe("staking", function () {
 
     vecontract = await ethers.getContractFactory("contracts/test/ve_test.sol:ve_test");
     ve = await vecontract.deploy(ve_underlying.address);
+
+    voter_test = await ethers.getContractFactory("contracts/test/voter_test.sol:voter_test");
+    voter = await voter_test.deploy();
   });
 
   it("create lock", async function () {
@@ -70,7 +74,7 @@ describe("staking", function () {
   it("deploy factory", async function () {
     const BaseV1GaugeFactory = await ethers.getContractFactory("BaseV1GaugeFactory");
     gauges_factory = await BaseV1GaugeFactory.deploy();
-    gauges_factory.createGauge(stake.address, owner.address, ve.address);
+    gauges_factory.createGaugeSingle(stake.address, owner.address, ve.address, voter.address);
     const gauge_address = await gauges_factory.last_gauge();
     const Gauge = await ethers.getContractFactory("Gauge");
     gauge = await Gauge.attach(gauge_address);
@@ -441,25 +445,25 @@ describe("staking", function () {
     await stake.connect(owner2).approve(staking.address, pair_1000);
     await stake.connect(owner2).approve(gauge.address, pair_1000);
     await staking.connect(owner2).stake(pair_1000);
-    await gauge.connect(owner2).deposit(pair_1000, 1);
+    await gauge.connect(owner2).deposit(pair_1000, 2);
     await staking.connect(owner2).withdraw(pair_1000);
     await gauge.connect(owner2).withdraw(pair_1000);
     await stake.connect(owner2).approve(staking.address, pair_1000);
     await stake.connect(owner2).approve(gauge.address, pair_1000);
     await staking.connect(owner2).stake(pair_1000);
-    await gauge.connect(owner2).deposit(pair_1000, 1);
+    await gauge.connect(owner2).deposit(pair_1000, 2);
     await staking.connect(owner2).withdraw(pair_1000);
     await gauge.connect(owner2).withdraw(pair_1000);
     await stake.connect(owner2).approve(staking.address, pair_1000);
     await stake.connect(owner2).approve(gauge.address, pair_1000);
     await staking.connect(owner2).stake(pair_1000);
-    await gauge.connect(owner2).deposit(pair_1000, 1);
+    await gauge.connect(owner2).deposit(pair_1000, 2);
     await staking.connect(owner2).withdraw(pair_1000);
     await gauge.connect(owner2).withdraw(pair_1000);
     await stake.connect(owner2).approve(staking.address, pair_1000);
     await stake.connect(owner2).approve(gauge.address, pair_1000);
     await staking.connect(owner2).stake(pair_1000);
-    await gauge.connect(owner2).deposit(pair_1000, 1);
+    await gauge.connect(owner2).deposit(pair_1000, 2);
     await network.provider.send("evm_increaseTime", [1800])
     await network.provider.send("evm_mine")
     await staking.connect(owner2).withdraw(pair_1000);
@@ -467,7 +471,7 @@ describe("staking", function () {
     await stake.connect(owner2).approve(staking.address, pair_1000);
     await stake.connect(owner2).approve(gauge.address, pair_1000);
     await staking.connect(owner2).stake(pair_1000);
-    await gauge.connect(owner2).deposit(pair_1000, 1);
+    await gauge.connect(owner2).deposit(pair_1000, 2);
     await staking.connect(owner2).getReward();
     await gauge.connect(owner2).getReward(owner2.address, [ve_underlying.address])
     await network.provider.send("evm_increaseTime", [604800])
@@ -477,7 +481,7 @@ describe("staking", function () {
     await stake.connect(owner2).approve(staking.address, pair_1000);
     await stake.connect(owner2).approve(gauge.address, pair_1000);
     await staking.connect(owner2).stake(pair_1000);
-    await gauge.connect(owner2).deposit(pair_1000, 1);
+    await gauge.connect(owner2).deposit(pair_1000, 2);
     expect(await staking.rewardPerTokenStored()).to.equal(await gauge.rewardPerTokenStored(ve_underlying.address))
     expect(await staking.rewardPerTokenStored()).to.above(ethers.BigNumber.from("1330355346300364281191"))
   });

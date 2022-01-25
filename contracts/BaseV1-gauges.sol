@@ -39,6 +39,11 @@ interface IBribe {
     function notifyRewardAmount(address token, uint amount) external;
 }
 
+interface Voter {
+    function attachTokenToGauge(uint _tokenId) external;
+    function detachTokenFromGauge(uint _tokenId) external;
+}
+
 // Gauges are used to incentivize pools, they emit reward tokens over 7 days for staked LP tokens
 contract Gauge {
 
@@ -448,7 +453,13 @@ contract Gauge {
     }
 
     function deposit(uint amount, uint tokenId) public lock {
-        tokenIds[msg.sender] = tokenId;
+        require(amount > 0);
+        if (tokenId > 0) {
+            require(ve(_ve).ownerOf(tokenId) == msg.sender);
+            if (balanceOf[msg.sender] == 0) Voter(voter).attachTokenToGauge(tokenId);
+            tokenIds[msg.sender] = tokenId;
+        }
+
         _safeTransferFrom(stake, msg.sender, address(this), amount);
         totalSupply += amount;
         balanceOf[msg.sender] += amount;
@@ -464,10 +475,16 @@ contract Gauge {
     }
 
     function withdraw(uint amount) public lock {
-        tokenIds[msg.sender] = 0;
+        uint tokenId = tokenIds[msg.sender];
+
         totalSupply -= amount;
         balanceOf[msg.sender] -= amount;
         _safeTransfer(stake, msg.sender, amount);
+
+        if (tokenId > 0 && balanceOf[msg.sender] == 0) {
+            Voter(voter).detachTokenFromGauge(tokenId);
+            tokenIds[msg.sender] = 0;
+        }
 
         uint _derivedBalance = derivedBalances[msg.sender];
         derivedSupply -= _derivedBalance;
@@ -527,33 +544,14 @@ contract Gauge {
 
 contract BaseV1GaugeFactory {
     address public last_gauge;
-    address[] public gauges;    
-    uint256 public gaugesLength;
-    mapping(address => address[]) public gaugesByPoolAddress;
-    mapping(address => address[]) public gaugesByBribeAddress;
-    mapping(address => address[]) public gaugesByVeAddress;
-    mapping(address => address[]) public gaugesByVoterAddress;
-    mapping(address => uint256) public gaugesByPoolAddressLength;
-    mapping(address => uint256) public gaugesByBribeAddressLength;
-    mapping(address => uint256) public gaugesByVeAddressLength;
-    mapping(address => uint256) public gaugesByVoterAddressLength;
-    
+
     function createGauge(address _pool, address _bribe, address _ve) external returns (address) {
         last_gauge = address(new Gauge(_pool, _bribe, _ve, msg.sender));
-        registerGauge(last_gauge, _pool, _bribe, _ve, msg.sender);
         return last_gauge;
     }
-    
-    function registerGauge(address _gauge, address _pool, address _bribe, address _ve, address _voter) internal {
-        gauges.push(_gauge);
-        gaugesByPoolAddress[_pool].push(_gauge);
-        gaugesByBribeAddress[_bribe].push(_gauge);
-        gaugesByVeAddress[_ve].push(_gauge);
-        gaugesByVoterAddress[_voter].push(_gauge);
-        gaugesLength++;
-        gaugesByPoolAddressLength[_pool]++;
-        gaugesByBribeAddressLength[_bribe]++;
-        gaugesByVeAddressLength[_ve]++;
-        gaugesByVoterAddressLength[_voter]++;
+
+    function createGaugeSingle(address _pool, address _bribe, address _ve, address _voter) external returns (address) {
+        last_gauge = address(new Gauge(_pool, _bribe, _ve, _voter));
+        return last_gauge;
     }
 }

@@ -224,6 +224,7 @@ describe("washtrade", function () {
   });
 
   it("gauge reset", async function () {
+    await ve.setVoter(gauge_factory.address);
     await gauge_factory.reset(1);
   });
 

@@ -24,6 +24,10 @@ interface ve {
     function isApprovedOrOwner(address, uint) external view returns (bool);
     function ownerOf(uint) external view returns (address);
     function transferFrom(address, address, uint) external;
+    function attach(uint tokenId) external;
+    function detach(uint tokenId) external;
+    function voting(uint tokenId) external;
+    function abstain(uint tokenId) external;
 }
 
 interface IBaseV1Factory {
@@ -508,6 +512,29 @@ contract BaseV1Voter {
     mapping(uint => mapping(address => uint)) public votes; // nft => pool => votes
     mapping(uint => address[]) public poolVote; // nft => pools
     mapping(uint => uint) public usedWeights;  // nft => total voting weight of user
+    mapping(address => bool) public isGauge;
+
+    address[] public gaugesArray;
+    mapping(address => address[]) public gaugesByPoolAddress;
+    mapping(address => address[]) public gaugesByBribeAddress;
+
+    function gaugesByPoolAddressLength(address _pool) external view returns (uint) {
+        return gaugesByPoolAddress[_pool].length;
+    }
+
+    function gaugesByBribeAddressLength(address _bribe) external view returns (uint) {
+        return gaugesByBribeAddress[_bribe].length;
+    }
+
+    function gaugesArrayLength() external view returns (uint) {
+        return gaugesArray.length;
+    }
+
+    function registerGauge(address _gauge, address _pool, address _bribe) internal {
+        gaugesArray.push(_gauge);
+        gaugesByPoolAddress[_pool].push(_gauge);
+        gaugesByBribeAddress[_bribe].push(_gauge);
+    }
 
     constructor(address __ve, address _factory, address  _gauges) {
         _ve = __ve;
@@ -518,6 +545,7 @@ contract BaseV1Voter {
 
     function reset(uint _tokenId) external {
         _reset(_tokenId);
+        ve(_ve).abstain(_tokenId);
     }
 
     function _reset(uint _tokenId) internal {
@@ -583,7 +611,7 @@ contract BaseV1Voter {
                 Bribe(bribes[_gauge])._deposit(_poolWeight, _tokenId);
             }
         }
-
+        if (_usedWeight > 0) ve(_ve).voting(_tokenId);
         usedWeights[_tokenId] = _usedWeight;
     }
 
@@ -601,9 +629,48 @@ contract BaseV1Voter {
         bribes[_gauge] = _bribe;
         gauges[_pool] = _gauge;
         poolForGauge[_gauge] = _pool;
+        isGauge[_gauge] = true;
+        registerGauge(_gauge, _pool, _bribe);
         _updateFor(_gauge);
         pools.push(_pool);
         return _gauge;
+    }
+
+    mapping(uint => address[]) public attachedGauges;
+
+    function attachedGaugesLength(uint tokenId) external view returns (uint) {
+        return attachedGauges[tokenId].length;
+    }
+
+    function attachTokenToGauge(uint tokenId) external {
+        require(isGauge[msg.sender]);
+        attachedGauges[tokenId].push(msg.sender);
+        ve(_ve).attach(tokenId);
+    }
+
+    function detachTokenFromGauge(uint tokenId) external {
+        require(isGauge[msg.sender]);
+        _remove(attachedGauges[tokenId], msg.sender);
+        ve(_ve).detach(tokenId);
+    }
+
+    function _findIndex(address[] memory array, address element) internal pure returns (uint i) {
+        for (i = 0; i < array.length; i++) {
+            if (array[i] == element) {
+                break;
+            }
+        }
+    }
+
+    function _remove(address[] storage array, address element) internal {
+        uint _index = _findIndex(array, element);
+        uint _length = array.length;
+        if (_index >= _length) return;
+        if (_index < _length-1) {
+            array[_index] = array[_length-1];
+        }
+
+        array.pop();
     }
 
     function length() external view returns (uint) {

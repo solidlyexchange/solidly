@@ -3,9 +3,9 @@ pragma solidity 0.8.11;
 
 contract BaseV1 {
 
-    string public constant symbol = "BaseV1";
-    string public constant name = "BaseV1";
-    uint8 public decimals = 18;
+    string public constant symbol = "SOLID";
+    string public constant name = "Solidly";
+    uint8 public constant decimals = 18;
     uint256 public totalSupply = 0;
 
     mapping(address => uint256) public balanceOf;
@@ -29,11 +29,13 @@ contract BaseV1 {
         address _router
     ) {
         router = _router;
+        minter = msg.sender;
         _mint(msg.sender, 0);
     }
 
+    // No checks as its meant to be once off to set minting rights to BaseV1 Minter
     function setMinter(address _minter) external {
-        require(msg.sender == router);
+        require(msg.sender == minter);
         minter = _minter;
     }
 
