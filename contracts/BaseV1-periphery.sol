@@ -46,6 +46,9 @@ library Math {
             z = 1;
         }
     }
+    function sub(uint x, uint y) internal pure returns (uint z) {
+        require((z = x - y) <= x, 'Math: Sub-underflow');
+    }
 }
 
 interface IWFTM {
@@ -54,7 +57,12 @@ interface IWFTM {
     function withdraw(uint) external returns (uint);
 }
 
-contract BaseV1Router01 {
+// Experimental Extension [ftm.guru/solidly/BaseV1Router02]
+// contract BaseV1Router02 is BaseV1Router01
+// with Support for Fee-on-Transfer Tokens
+contract BaseV1Router02 {
+
+	using Math for uint;
 
     struct route {
         address from;
@@ -79,7 +87,7 @@ contract BaseV1Router01 {
     }
 
     receive() external payable {
-        assert(msg.sender == address(wftm)); // only accept ETH via fallback from the WETH contract
+        assert(msg.sender == address(wftm)); // only accept FTM via fallback from the WFTM contract
     }
 
     function sortTokens(address tokenA, address tokenB) public pure returns (address token0, address token1) {
@@ -114,7 +122,7 @@ contract BaseV1Router01 {
     }
 
     // performs chained getAmountOut calculations on any number of pairs
-    function getAmountOut(uint amountIn, address tokenIn, address tokenOut) external view returns (uint amount, bool stable) {
+    function getAmountOut(uint amountIn, address tokenIn, address tokenOut) public view returns (uint amount, bool stable) {
         address pair = pairFor(tokenIn, tokenOut, true);
         uint amountStable;
         uint amountVolatile;
@@ -272,7 +280,7 @@ contract BaseV1Router01 {
         wftm.deposit{value: amountFTM}();
         assert(wftm.transfer(pair, amountFTM));
         liquidity = IBaseV1Pair(pair).mint(to);
-        // refund dust eth, if any
+        // refund dust ftm, if any
         if (msg.value > amountFTM) _safeTransferFTM(msg.sender, msg.value - amountFTM);
     }
 
@@ -449,7 +457,7 @@ contract BaseV1Router01 {
 
     function _safeTransferFTM(address to, uint value) internal {
         (bool success,) = to.call{value:value}(new bytes(0));
-        require(success, 'TransferHelper: ETH_TRANSFER_FAILED');
+        require(success, 'TransferHelper: FTM_TRANSFER_FAILED');
     }
 
     function _safeTransfer(address token, address to, uint256 value) internal {
@@ -464,5 +472,130 @@ contract BaseV1Router01 {
         (bool success, bytes memory data) =
         token.call(abi.encodeWithSelector(erc20.transferFrom.selector, from, to, value));
         require(success && (data.length == 0 || abi.decode(data, (bool))));
+    }
+
+    // Experimental Extension [ftm.guru/solidly/BaseV1Router02]
+
+    // **** REMOVE LIQUIDITY (supporting fee-on-transfer tokens)****
+    function removeLiquidityFTMSupportingFeeOnTransferTokens(
+        address token,
+        bool stable,
+        uint liquidity,
+        uint amountTokenMin,
+        uint amountFTMMin,
+        address to,
+        uint deadline
+    ) public ensure(deadline) returns (uint amountToken, uint amountFTM) {
+        (amountToken, amountFTM) = removeLiquidity(
+            token,
+            address(wftm),
+            stable,
+            liquidity,
+            amountTokenMin,
+            amountFTMMin,
+            address(this),
+            deadline
+        );
+        _safeTransfer(token, to, erc20(token).balanceOf(address(this)));
+        wftm.withdraw(amountFTM);
+        _safeTransferFTM(to, amountFTM);
+    }
+    function removeLiquidityFTMWithPermitSupportingFeeOnTransferTokens(
+        address token,
+        bool stable,
+        uint liquidity,
+        uint amountTokenMin,
+        uint amountFTMMin,
+        address to,
+        uint deadline,
+        bool approveMax, uint8 v, bytes32 r, bytes32 s
+    ) external returns (uint amountToken, uint amountFTM) {
+        address pair = pairFor(token, address(wftm), stable);
+        uint value = approveMax ? type(uint).max : liquidity;
+        IBaseV1Pair(pair).permit(msg.sender, address(this), value, deadline, v, r, s);
+        (amountToken, amountFTM) = removeLiquidityFTMSupportingFeeOnTransferTokens(
+            token, stable, liquidity, amountTokenMin, amountFTMMin, to, deadline
+        );
+    }
+    // **** SWAP (supporting fee-on-transfer tokens) ****
+    // requires the initial amount to have already been sent to the first pair
+    function _swapSupportingFeeOnTransferTokens(route[] memory routes, address _to) internal virtual {
+        for (uint i; i < routes.length; i++) {
+        	(address input, address output) = (routes[i].from, routes[i].to);
+            (address token0,) = sortTokens(input, output);
+            IBaseV1Pair pair = IBaseV1Pair(pairFor(routes[i].from, routes[i].to, routes[i].stable));
+            uint amountInput;
+            uint amountOutput;
+            { // scope to avoid stack too deep errors
+            (uint reserve0, uint reserve1,) = pair.getReserves();
+            (uint reserveInput, uint reserveOutput) = input == token0 ? (reserve0, reserve1) : (reserve1, reserve0);
+            amountInput = erc20(input).balanceOf(address(pair)).sub(reserveInput);
+            (amountOutput,) = getAmountOut(amountInput, input, output);
+            }
+            (uint amount0Out, uint amount1Out) = input == token0 ? (uint(0), amountOutput) : (amountOutput, uint(0));
+            address to = i < routes.length - 1 ? pairFor(routes[i+1].from, routes[i+1].to, routes[i+1].stable) : _to;
+            pair.swap(amount0Out, amount1Out, to, new bytes(0));
+        }
+    }
+    function swapExactTokensForTokensSupportingFeeOnTransferTokens(
+        uint amountIn,
+        uint amountOutMin,
+        route[] calldata routes,
+        address to,
+        uint deadline
+    ) external ensure(deadline) {
+        _safeTransferFrom(
+        	routes[0].from,
+        	msg.sender,
+        	pairFor(routes[0].from, routes[0].to, routes[0].stable),
+        	amountIn
+        );
+        uint balanceBefore = erc20(routes[routes.length - 1].to).balanceOf(to);
+        _swapSupportingFeeOnTransferTokens(routes, to);
+        require(
+            erc20(routes[routes.length - 1].to).balanceOf(to).sub(balanceBefore) >= amountOutMin,
+            'BaseV1Router: INSUFFICIENT_OUTPUT_AMOUNT'
+        );
+    }
+    function swapExactFTMForTokensSupportingFeeOnTransferTokens(
+        uint amountOutMin,
+        route[] calldata routes,
+        address to,
+        uint deadline
+    )
+        external
+        payable
+        ensure(deadline)
+    {
+        require(routes[0].from == address(wftm), 'BaseV1Router: INVALID_PATH');
+        uint amountIn = msg.value;
+        wftm.deposit{value: amountIn}();
+        assert(wftm.transfer(pairFor(routes[0].from, routes[0].to, routes[0].stable), amountIn));
+        uint balanceBefore = erc20(routes[routes.length - 1].to).balanceOf(to);
+        _swapSupportingFeeOnTransferTokens(routes, to);
+        require(
+            erc20(routes[routes.length - 1].to).balanceOf(to).sub(balanceBefore) >= amountOutMin,
+            'BaseV1Router: INSUFFICIENT_OUTPUT_AMOUNT'
+        );
+    }
+    function swapExactTokensForETHSupportingFeeOnTransferTokens(
+        uint amountIn,
+        uint amountOutMin,
+        route[] calldata routes,
+        address to,
+        uint deadline
+    )
+        external
+        ensure(deadline)
+    {
+        require(routes[routes.length - 1].to == address(wftm), 'BaseV1Router: INVALID_PATH');
+        _safeTransferFrom(
+            routes[0].from, msg.sender, pairFor(routes[0].from, routes[0].to, routes[0].stable), amountIn
+        );
+        _swapSupportingFeeOnTransferTokens(routes, address(this));
+        uint amountOut = erc20(address(wftm)).balanceOf(address(this));
+        require(amountOut >= amountOutMin, 'BaseV1Router: INSUFFICIENT_OUTPUT_AMOUNT');
+        wftm.withdraw(amountOut);
+        _safeTransferFTM(to, amountOut);
     }
 }
