@@ -582,7 +582,7 @@ contract BaseV1Router02 {
             'BaseV1Router: INSUFFICIENT_OUTPUT_AMOUNT'
         );
     }
-    function swapExactTokensForETHSupportingFeeOnTransferTokens(
+    function swapExactTokensForFTMSupportingFeeOnTransferTokens(
         uint amountIn,
         uint amountOutMin,
         route[] calldata routes,
