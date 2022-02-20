@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
-// Extension of Solidly's Periphery (Router) - github.com/andrecronje/solidly
-// With 🦾 from ftm.guru
+// ftm.guru's extension of Solidly's periphery (Router)
+// https://github.com/andrecronje/solidly/blob/master/contracts/BaseV1-periphery.sol
+// BaseV1Router02.sol : Supporting Fee-on-transfer Tokens
+// https://github.com/ftm1337/solidly-with-FoT/blob/master/contracts/BaseV1-periphery.sol
 
 pragma solidity 0.8.11;
 
@@ -521,7 +523,7 @@ contract BaseV1Router02 {
     }
     // **** SWAP (supporting fee-on-transfer tokens) ****
     // requires the initial amount to have already been sent to the first pair
-    function _swapSupportingFeeOnTransferTokens(route[] memory routes, address _to) internal virtual {
+    function _swapSupportingFeeOnTransferTokens(route[] calldata routes, address _to) internal virtual {
         for (uint i; i < routes.length; i++) {
         	(address input, address output) = (routes[i].from, routes[i].to);
             (address token0,) = sortTokens(input, output);
@@ -530,7 +532,7 @@ contract BaseV1Router02 {
             uint amountOutput;
             { // scope to avoid stack too deep errors
             (uint reserve0, uint reserve1,) = pair.getReserves();
-            (uint reserveInput, uint reserveOutput) = input == token0 ? (reserve0, reserve1) : (reserve1, reserve0);
+            (uint reserveInput,) = input == token0 ? (reserve0, reserve1) : (reserve1, reserve0);
             amountInput = erc20(input).balanceOf(address(pair)).sub(reserveInput);
             (amountOutput,) = getAmountOut(amountInput, input, output);
             }
@@ -542,7 +544,7 @@ contract BaseV1Router02 {
     function swapExactTokensForTokensSupportingFeeOnTransferTokens(
         uint amountIn,
         uint amountOutMin,
-        route[] memory routes,
+        route[] calldata routes,
         address to,
         uint deadline
     ) external ensure(deadline) {
@@ -561,7 +563,7 @@ contract BaseV1Router02 {
     }
     function swapExactFTMForTokensSupportingFeeOnTransferTokens(
         uint amountOutMin,
-        route[] memory routes,
+        route[] calldata routes,
         address to,
         uint deadline
     )
@@ -583,7 +585,7 @@ contract BaseV1Router02 {
     function swapExactTokensForETHSupportingFeeOnTransferTokens(
         uint amountIn,
         uint amountOutMin,
-        route[] memory routes,
+        route[] calldata routes,
         address to,
         uint deadline
     )
