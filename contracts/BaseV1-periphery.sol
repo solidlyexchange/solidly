@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: MIT
+// Extension of Solidly's Periphery (Router) - github.com/andrecronje/solidly
+// With 🦾 from ftm.guru
 
 pragma solidity 0.8.11;
 
@@ -540,7 +542,7 @@ contract BaseV1Router02 {
     function swapExactTokensForTokensSupportingFeeOnTransferTokens(
         uint amountIn,
         uint amountOutMin,
-        route[] calldata routes,
+        route[] memory routes,
         address to,
         uint deadline
     ) external ensure(deadline) {
@@ -559,7 +561,7 @@ contract BaseV1Router02 {
     }
     function swapExactFTMForTokensSupportingFeeOnTransferTokens(
         uint amountOutMin,
-        route[] calldata routes,
+        route[] memory routes,
         address to,
         uint deadline
     )
@@ -581,7 +583,7 @@ contract BaseV1Router02 {
     function swapExactTokensForETHSupportingFeeOnTransferTokens(
         uint amountIn,
         uint amountOutMin,
-        route[] calldata routes,
+        route[] memory routes,
         address to,
         uint deadline
     )
