@@ -140,6 +140,16 @@ contract BaseV1Router02 {
         return amountStable > amountVolatile ? (amountStable, true) : (amountVolatile, false);
     }
 
+    //@override
+    //getAmountOut	:	bool stable
+    //Gets exact output for specific pair-type(S|V)
+    function getAmountOut(uint amountIn, address tokenIn, address tokenOut, bool stable) public view returns (uint amount) {
+        address pair = pairFor(tokenIn, tokenOut, stable);
+        if (IBaseV1Factory(factory).isPair(pair)) {
+            amount = IBaseV1Pair(pair).getAmountOut(amountIn, tokenIn);
+        }
+    }
+
     // performs chained getAmountOut calculations on any number of pairs
     function getAmountsOut(uint amountIn, route[] memory routes) public view returns (uint[] memory amounts) {
         require(routes.length >= 1, 'BaseV1Router: INVALID_PATH');
@@ -523,18 +533,19 @@ contract BaseV1Router02 {
     }
     // **** SWAP (supporting fee-on-transfer tokens) ****
     // requires the initial amount to have already been sent to the first pair
-    function _swapSupportingFeeOnTransferTokens(route[] calldata routes, address _to) internal virtual {
+    function _swapSupportingFeeOnTransferTokens(route[] memory routes, address _to) internal virtual {
         for (uint i; i < routes.length; i++) {
-        	(address input, address output) = (routes[i].from, routes[i].to);
+        	(address input, address output, bool stable) = (routes[i].from, routes[i].to, routes[i].stable);
             (address token0,) = sortTokens(input, output);
             IBaseV1Pair pair = IBaseV1Pair(pairFor(routes[i].from, routes[i].to, routes[i].stable));
             uint amountInput;
             uint amountOutput;
             { // scope to avoid stack too deep errors
             (uint reserve0, uint reserve1,) = pair.getReserves();
-            (uint reserveInput,) = input == token0 ? (reserve0, reserve1) : (reserve1, reserve0);
+            (uint reserveInput, uint reserveOutput) = input == token0 ? (reserve0, reserve1) : (reserve1, reserve0);
             amountInput = erc20(input).balanceOf(address(pair)).sub(reserveInput);
-            (amountOutput,) = getAmountOut(amountInput, input, output);
+            //(amountOutput,) = getAmountOut(amountInput, input, output, stable);
+            amountOutput = pair.getAmountOut(amountInput, input);
             }
             (uint amount0Out, uint amount1Out) = input == token0 ? (uint(0), amountOutput) : (amountOutput, uint(0));
             address to = i < routes.length - 1 ? pairFor(routes[i+1].from, routes[i+1].to, routes[i+1].stable) : _to;
